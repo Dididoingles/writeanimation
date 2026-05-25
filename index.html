@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Criador de animação Freehand</title>
+    <title>Animador de Escrita Livre</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
@@ -329,7 +329,188 @@
         </div>
     </div>
 
-    <script src="gif.js"></script>
+    <script>
+        // Motor de Renderização GIFENC Embutido de Alta Performance
+        const gifenc = (function() {
+            function GIFEncoder(opts = {}) {
+                const stream = [];
+                let width = 0, height = 0;
+                let firstFrame = true;
+                return {
+                    writeHeader() {
+                        stream.push(71, 73, 70, 56, 57, 97);
+                    },
+                    writeLogicalScreenDescriptor(w, h, globalPalette = false) {
+                        width = w; height = h;
+                        stream.push(w & 0xff, (w >> 8) & 0xff);
+                        stream.push(h & 0xff, (h >> 8) & 0xff);
+                        stream.push(globalPalette ? 0x80 | 0x70 | 7 : 0);
+                        stream.push(0, 0);
+                    },
+                    writeApplicationExtension() {
+                        stream.push(0x21, 0xff, 11);
+                        const arr = [78, 69, 84, 83, 67, 65, 80, 69, 50, 46, 48];
+                        for(let i=0; i<11; i++) stream.push(arr[i]);
+                        stream.push(3, 1, 0, 0, 0);
+                    },
+                    writeGraphicControlExtension(delay, transparentIndex) {
+                        stream.push(0x21, 0xf9, 4);
+                        const hasTransparent = transparentIndex !== null && transparentIndex !== undefined;
+                        stream.push(hasTransparent ? 9 : 0);
+                        stream.push(delay & 0xff, (delay >> 8) & 0xff);
+                        stream.push(hasTransparent ? transparentIndex : 0);
+                        stream.push(0);
+                    },
+                    writeImageDescriptor(w, h, localPalette = false) {
+                        stream.push(0x2c);
+                        stream.push(0, 0, 0, 0);
+                        stream.push(w & 0xff, (w >> 8) & 0xff);
+                        stream.push(h & 0xff, (h >> 8) & 0xff);
+                        stream.push(localPalette ? 0x80 | 7 : 0);
+                    },
+                    writeColorTable(palette) {
+                        for (let i = 0; i < 256; i++) {
+                            if (i < palette.length) {
+                                stream.push(palette[i][0], palette[i][1], palette[i][2]);
+                            } else {
+                                stream.push(0, 0, 0);
+                            }
+                        }
+                    },
+                    writePixels(indexData) {
+                        stream.push(8);
+                        let lzwBits = 9;
+                        let clearCode = 256;
+                        let endCode = 257;
+                        let nextCode = 258;
+                        let prefix = [];
+                        let outputArr = [];
+                        let outputBits = 0;
+                        let outputBuffer = 0;
+
+                        function writeBits(code, bits) {
+                            outputBuffer |= (code << outputBits);
+                            outputBits += bits;
+                            while (outputBits >= 8) {
+                                outputArr.push(outputBuffer & 0xff);
+                                outputBuffer >>= 8;
+                                outputBits -= 8;
+                            }
+                        }
+
+                        writeBits(clearCode, lzwBits);
+
+                        const dict = new Map();
+
+                        for (let i = 0; i < indexData.length; i++) {
+                            let k = indexData[i];
+                            let key = prefix.length === 0 ? String(k) : prefix.join(',') + ',' + k;
+                            if (dict.has(key)) {
+                                prefix.push(k);
+                            } else {
+                                if (prefix.length === 0) {
+                                    writeBits(0, lzwBits);
+                                } else {
+                                    let pKey = prefix.join(',');
+                                    let code = prefix.length === 1 ? prefix[0] : dict.get(pKey);
+                                    writeBits(code, lzwBits);
+                                }
+                                dict.set(key, nextCode++);
+                                if (nextCode === (1 << lzwBits) + 1) {
+                                    lzwBits++;
+                                }
+                                if (nextCode >= 4094) {
+                                    writeBits(clearCode, lzwBits);
+                                    dict.clear();
+                                    lzwBits = 9;
+                                    nextCode = 258;
+                                }
+                                prefix = [k];
+                            }
+                        }
+
+                        if (prefix.length > 0) {
+                            let pKey = prefix.join(',');
+                            let code = prefix.length === 1 ? prefix[0] : dict.get(pKey);
+                            writeBits(code, lzwBits);
+                        }
+
+                        writeBits(endCode, lzwBits);
+
+                        while (outputBits > 0) {
+                            outputArr.push(outputBuffer & 0xff);
+                            outputBuffer >>= 8;
+                            outputBits -= 8;
+                        }
+
+                        let idx = 0;
+                        while (idx < outputArr.length) {
+                            let size = Math.min(255, outputArr.length - idx);
+                            stream.push(size);
+                            for (let i = 0; i < size; i++) {
+                                stream.push(outputArr[idx + i]);
+                            }
+                            idx += size;
+                        }
+                        stream.push(0);
+                    },
+                    addFrame(rgbaData, w, h, delay) {
+                        if (firstFrame) {
+                            this.writeHeader();
+                            this.writeLogicalScreenDescriptor(w, h, false);
+                            firstFrame = false;
+                        }
+
+                        const paletteMap = new Map();
+                        const palette = [];
+                        
+                        // O índice 0 é reservado estritamente para transparência limpa
+                        palette.push([0, 0, 0]); 
+                        paletteMap.set('0,0,0,0', 0);
+
+                        const indexData = new Uint8Array(w * h);
+
+                        for (let i = 0; i < rgbaData.length; i += 4) {
+                            let r = rgbaData[i];
+                            let g = rgbaData[i+1];
+                            let b = rgbaData[i+2];
+                            let a = rgbaData[i+3];
+                            let pixelIdx = i / 4;
+
+                            if (a < 128) {
+                                indexData[pixelIdx] = 0;
+                            } else {
+                                let key = `${r},${g},${b}`;
+                                if (!paletteMap.has(key)) {
+                                    if (palette.length < 256) {
+                                        paletteMap.set(key, palette.length);
+                                        palette.push([r, g, b]);
+                                    } else {
+                                        paletteMap.set(key, 255);
+                                    }
+                                }
+                                indexData[pixelIdx] = paletteMap.get(key);
+                            }
+                        }
+
+                        if(stream.length === 6 + 7) {
+                            this.writeApplicationExtension();
+                        }
+
+                        this.writeGraphicControlExtension(delay, 0);
+                        this.writeImageDescriptor(w, h, true);
+                        this.writeColorTable(palette);
+                        this.writePixels(indexData);
+                    },
+                    getBlob() {
+                        stream.push(0x3b); // Trailer do GIF
+                        return new Blob([new Uint8Array(stream)], { type: 'image/gif' });
+                    }
+                };
+            }
+            return { GIFEncoder };
+        })();
+    </script>
 
     <script>
         const canvas = document.getElementById('paintCanvas');
@@ -537,13 +718,24 @@
             btnGenerate.disabled = true;
             btnRecord.disabled = true;
 
-            const encoder = new GIF({
-                workers: 2,
-                repeat: 0,
-                width: canvas.width,
-                height: canvas.height,
-                complete: function(blob) {
-                    progressBar.style.width = '100%';
+            // Execução imediata e controlada no escopo local do navegador
+            setTimeout(() => {
+                try {
+                    const encoder = new gifenc.GIFEncoder();
+                    const totalFrames = recordedFrames.length;
+                    const delayInCentiseconds = Math.round(100 / fps);
+
+                    for (let i = 0; i < totalFrames; i++) {
+                        encoder.addFrame(recordedFrames[i].data, canvas.width, canvas.height, delayInCentiseconds);
+                        
+                        // Atualiza progressivamente a barra de carregamento baseada nos frames processados
+                        let pct = Math.floor(((i + 1) / totalFrames) * 100);
+                        progressBar.style.width = `${pct}%`;
+                        loaderText.textContent = `Compilando frames: ${pct}%`;
+                    }
+
+                    const blob = encoder.getBlob();
+                    
                     loaderText.textContent = 'Pronto! Baixando...';
                     
                     setTimeout(() => {
@@ -559,17 +751,17 @@
                         btnGenerate.disabled = false;
                         statusText.textContent = 'Pronto';
                     }, 500);
+
+                } catch (error) {
+                    console.error(error);
+                    loaderText.textContent = 'Erro ao processar. Tente novamente.';
+                    setTimeout(() => {
+                        loaderOverlay.style.display = 'none';
+                        btnRecord.disabled = false;
+                        btnGenerate.disabled = false;
+                    }, 2000);
                 }
-            });
-
-            for (let i = 0; i < recordedFrames.length; i++) {
-                encoder.addFrame(recordedFrames[i], { delay: 1000 / fps });
-            }
-
-            progressBar.style.width = '50%';
-            loaderText.textContent = 'Compilando frames...';
-
-            encoder.render();
+            }, 50);
         });
     </script>
 </body>
