@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Animador de Escrita Livre</title>
+    <title>Criador de animação Freehand</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
@@ -541,37 +541,33 @@
                 workers: 2,
                 repeat: 0,
                 width: canvas.width,
-                height: canvas.height
+                height: canvas.height,
+                complete: function(blob) {
+                    progressBar.style.width = '100%';
+                    loaderText.textContent = 'Pronto! Baixando...';
+                    
+                    setTimeout(() => {
+                        const downloadLink = document.createElement('a');
+                        downloadLink.href = URL.createObjectURL(blob);
+                        downloadLink.download = `animacao_dicarvalho_${Date.now()}.gif`;
+                        document.body.appendChild(downloadLink);
+                        downloadLink.click();
+                        document.body.removeChild(downloadLink);
+                        
+                        loaderOverlay.style.display = 'none';
+                        btnRecord.disabled = false;
+                        btnGenerate.disabled = false;
+                        statusText.textContent = 'Pronto';
+                    }, 500);
+                }
             });
 
             for (let i = 0; i < recordedFrames.length; i++) {
                 encoder.addFrame(recordedFrames[i], { delay: 1000 / fps });
             }
 
-            encoder.on('progress', function(pct) {
-                const percentage = Math.floor(pct * 100);
-                progressBar.style.width = `${percentage}%`;
-                loaderText.textContent = `Compilando frames: ${percentage}%`;
-            });
-
-            encoder.on('finished', function(blob) {
-                progressBar.style.width = '100%';
-                loaderText.textContent = 'Pronto! Baixando...';
-                
-                setTimeout(() => {
-                    const downloadLink = document.createElement('a');
-                    downloadLink.href = URL.createObjectURL(blob);
-                    downloadLink.download = `animacao_dicarvalho_${Date.now()}.gif`;
-                    document.body.appendChild(downloadLink);
-                    downloadLink.click();
-                    document.body.removeChild(downloadLink);
-                    
-                    loaderOverlay.style.display = 'none';
-                    btnRecord.disabled = false;
-                    btnGenerate.disabled = false;
-                    statusText.textContent = 'Pronto';
-                }, 500);
-            });
+            progressBar.style.width = '50%';
+            loaderText.textContent = 'Compilando frames...';
 
             encoder.render();
         });
