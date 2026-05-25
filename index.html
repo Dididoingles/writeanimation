@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Animador de Escrita Livre</title>
+    <title>Criador de animação Freehand</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
@@ -464,7 +464,6 @@
                         const paletteMap = new Map();
                         const palette = [];
                         
-                        // O índice 0 é reservado estritamente para transparência limpa
                         palette.push([0, 0, 0]); 
                         paletteMap.set('0,0,0,0', 0);
 
@@ -503,7 +502,7 @@
                         this.writePixels(indexData);
                     },
                     getBlob() {
-                        stream.push(0x3b); // Trailer do GIF
+                        stream.push(0x3b);
                         return new Blob([new Uint8Array(stream)], { type: 'image/gif' });
                     }
                 };
@@ -514,7 +513,8 @@
 
     <script>
         const canvas = document.getElementById('paintCanvas');
-        const ctx = canvas.getContext('2d');
+        // Adicionada a flag willReadFrequently para otimizar a performance de leitura de pixels
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
         const container = document.getElementById('canvasContainer');
         
         const paletteContainer = document.getElementById('colorPalette');
@@ -713,55 +713,59 @@
 
             loaderOverlay.style.display = 'flex';
             progressBar.style.width = '0%';
-            loaderText.textContent = 'Processando animação transparente...';
+            loaderText.textContent = 'Iniciando compilação assíncrona...';
             
             btnGenerate.disabled = true;
             btnRecord.disabled = true;
 
-            // Execução imediata e controlada no escopo local do navegador
-            setTimeout(() => {
-                try {
-                    const encoder = new gifenc.GIFEncoder();
-                    const totalFrames = recordedFrames.length;
-                    const delayInCentiseconds = Math.round(100 / fps);
+            const encoder = new gifenc.GIFEncoder();
+            const totalFrames = recordedFrames.length;
+            const delayInCentiseconds = Math.round(100 / fps);
+            let currentFrameIndex = 0;
 
-                    for (let i = 0; i < totalFrames; i++) {
-                        encoder.addFrame(recordedFrames[i].data, canvas.width, canvas.height, delayInCentiseconds);
-                        
-                        // Atualiza progressivamente a barra de carregamento baseada nos frames processados
-                        let pct = Math.floor(((i + 1) / totalFrames) * 100);
-                        progressBar.style.width = `${pct}%`;
-                        loaderText.textContent = `Compilando frames: ${pct}%`;
-                    }
+            // Processamento fatiado para dar fôlego ao processador do navegador
+            function processNextFrame() {
+                if (currentFrameIndex < totalFrames) {
+                    encoder.addFrame(recordedFrames[currentFrameIndex].data, canvas.width, canvas.height, delayInCentiseconds);
+                    
+                    currentFrameIndex++;
+                    
+                    let pct = Math.floor((currentFrameIndex / totalFrames) * 100);
+                    progressBar.style.width = `${pct}%`;
+                    loaderText.textContent = `Compilando frames: ${pct}%`;
+                    
+                    // Agenda o próximo frame liberando a thread principal por 1 milissegundo
+                    setTimeout(processNextFrame, 1);
+                } else {
+                    finalizeGif();
+                }
+            }
 
-                    const blob = encoder.getBlob();
-                    
-                    loaderText.textContent = 'Pronto! Baixando...';
-                    
-                    setTimeout(() => {
+            function finalizeGif() {
+                loaderText.textContent = 'Pronto! Baixando...';
+                
+                setTimeout(() => {
+                    try {
+                        const blob = encoder.getBlob();
                         const downloadLink = document.createElement('a');
                         downloadLink.href = URL.createObjectURL(blob);
                         downloadLink.download = `animacao_dicarvalho_${Date.now()}.gif`;
                         document.body.appendChild(downloadLink);
                         downloadLink.click();
                         document.body.removeChild(downloadLink);
-                        
-                        loaderOverlay.style.display = 'none';
-                        btnRecord.disabled = false;
-                        btnGenerate.disabled = false;
-                        statusText.textContent = 'Pronto';
-                    }, 500);
+                    } catch (err) {
+                        console.error("Erro ao gerar o Blob:", err);
+                    }
+                    
+                    loaderOverlay.style.display = 'none';
+                    btnRecord.disabled = false;
+                    btnGenerate.disabled = false;
+                    statusText.textContent = 'Pronto';
+                }, 300);
+            }
 
-                } catch (error) {
-                    console.error(error);
-                    loaderText.textContent = 'Erro ao processar. Tente novamente.';
-                    setTimeout(() => {
-                        loaderOverlay.style.display = 'none';
-                        btnRecord.disabled = false;
-                        btnGenerate.disabled = false;
-                    }, 2000);
-                }
-            }, 50);
+            // Inicializa a esteira de processamento seguro
+            setTimeout(processNextFrame, 10);
         });
     </script>
 </body>
