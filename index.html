@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Animador de Escrita Livre</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+    
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Poppins', sans-serif;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        body {
+            background-color: #1a1a1a;
+            color: #ffffff;
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .author-brand {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #ffffff;
+            letter-spacing: 0.5px;
+            z-index: 10;
+            opacity: 0.8;
+        }
+
+        .status-badge {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            z-index: 10;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background-color: #888;
+            border-radius: 50%;
+        }
+
+        .status-dot.recording {
+            background-color: #e31414;
+            animation: pulse 1s infinite alternate;
+        }
+
+        @keyframes pulse {
+            from { opacity: 0.4; }
+            to { opacity: 1; }
+        }
+
+        .canvas-container {
+            flex: 1;
+            position: relative;
+            background-color: #222222;
+            margin: 60px 15px 15px 15px;
+            border-radius: 8px;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            cursor: crosshair;
+            touch-action: none;
+        }
+
+        /* Modal do Loader de Processamento */
+        .loader-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(26, 26, 26, 0.9);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            border-radius: 8px;
+        }
+
+        .loader-spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid rgba(255, 255, 255, 0.1);
+            border-top-color: #c20000;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .progress-container {
+            width: 60%;
+            max-width: 300px;
+            background-color: #333;
+            height: 6px;
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+
+        .progress-bar {
+            width: 0%;
+            height: 100%;
+            background-color: #c20000;
+            transition: width 0.2s linear;
+        }
+
+        .control-panel {
+            background-color: #262626;
+            border-top: 3px solid #c20000;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            z-index: 10;
+        }
+
+        .control-row {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .color-palette {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .color-swatch {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: 2px solid transparent;
+            cursor: pointer;
+            transition: transform 0.1s ease;
+        }
+
+        .color-swatch:hover {
+            transform: scale(1.15);
+        }
+
+        .color-swatch.active {
+            border-color: #ffffff;
+            box-shadow: 0 0 4px rgba(0,0,0,0.5);
+        }
+
+        /* Input Hex com efeito Hover solicitado */
+        .custom-color-picker {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            background: #1a1a1a;
+            padding: 3px 8px;
+            border-radius: 6px;
+            border: 1px solid #444;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+            cursor: pointer;
+        }
+
+        .custom-color-picker:hover {
+            border-color: #c20000;
+            box-shadow: 0 0 5px rgba(194, 0, 0, 0.4);
+        }
+
+        .custom-color-picker input[type="color"] {
+            border: none;
+            background: none;
+            width: 24px;
+            height: 24px;
+            cursor: pointer;
+        }
+
+        .custom-color-picker input[type="text"] {
+            background: none;
+            border: none;
+            color: #fff;
+            width: 70px;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            outline: none;
+            cursor: pointer;
+        }
+
+        .tool-settings {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.85rem;
+        }
+
+        .tool-settings input[type="range"] {
+            accent-color: #c20000;
+            cursor: pointer;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            margin-left: auto;
+        }
+
+        .btn {
+            background-color: #333333;
+            color: #ffffff;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn:hover {
+            background-color: #444444;
+        }
+
+        .btn-primary {
+            background-color: #c20000;
+        }
+
+        .btn-primary:hover {
+            background-color: #a00000;
+        }
+
+        .btn-recording {
+            background-color: #e31414;
+            animation: pulse 1s infinite alternate;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        @media (max-width: 768px) {
+            .control-row {
+                justify-content: space-between;
+            }
+            .action-buttons {
+                width: 100%;
+                justify-content: space-between;
+                margin-left: 0;
+            }
+            .action-buttons .btn {
+                flex: 1;
+                justify-content: center;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="author-brand">@dicarvalho.prof</div>
+    
+    <div class="status-badge">
+        <div class="status-dot" id="statusDot"></div>
+        <span id="statusText">Pronto</span>
+    </div>
+
+    <div class="canvas-container" id="canvasContainer">
+        <div class="loader-overlay" id="loaderOverlay">
+            <div class="loader-spinner"></div>
+            <p id="loaderText">Renderizando animação...</p>
+            <div class="progress-container">
+                <div class="progress-bar" id="progressBar"></div>
+            </div>
+        </div>
+        
+        <canvas id="paintCanvas"></canvas>
+    </div>
+
+    <div class="control-panel">
+        <div class="control-row">
+            <div class="color-palette" id="colorPalette"></div>
+
+            <div class="custom-color-picker" id="pickerWrapper">
+                <input type="color" id="htmlColorPicker" value="#c20000">
+                <input type="text" id="hexTextInput" value="#C20000" maxlength="7">
+            </div>
+
+            <div class="tool-settings">
+                <span>Espessura:</span>
+                <input type="range" id="lineWidthSlider" min="2" max="25" value="5">
+                <span id="lineWidthVal">5px</span>
+            </div>
+        </div>
+
+        <div class="control-row">
+            <div class="action-buttons">
+                <button class="btn" id="btnClear">Limpar Canvas</button>
+                <button class="btn btn-primary" id="btnRecord">Iniciar Gravação</button>
+                <button class="btn" id="btnGenerate" disabled>Gerar GIF</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gifshot/0.4.5/gifshot.min.js"></script>
+
+    <script>
+        const canvas = document.getElementById('paintCanvas');
+        const ctx = canvas.getContext('2d');
+        const container = document.getElementById('canvasContainer');
+        
+        const paletteContainer = document.getElementById('colorPalette');
+        const htmlColorPicker = document.getElementById('htmlColorPicker');
+        const hexTextInput = document.getElementById('hexTextInput');
+        const pickerWrapper = document.getElementById('pickerWrapper');
+        const lineWidthSlider = document.getElementById('lineWidthSlider');
+        const lineWidthVal = document.getElementById('lineWidthVal');
+        const btnClear = document.getElementById('btnClear');
+        const btnRecord = document.getElementById('btnRecord');
+        const btnGenerate = document.getElementById('btnGenerate');
+        const statusDot = document.getElementById('statusDot');
+        const statusText = document.getElementById('statusText');
+        
+        // Elementos do Loader
+        const loaderOverlay = document.getElementById('loaderOverlay');
+        const loaderText = document.getElementById('loaderText');
+        const progressBar = document.getElementById('progressBar');
+
+        let isPainting = false;
+        let currentColor = '#c20000';
+        let currentWidth = 5;
+
+        let isRecording = false;
+        let recordedFrames = [];
+        let recordInterval = null;
+        
+        // OTIMIZAÇÃO: 10 FPS equilibra fluidez de texto com performance mobile de renderização
+        const fps = 10; 
+
+        const defaultColors = [
+            '#c20000', '#000000', '#ffffff', '#e31414', 
+            '#ffb600', '#0bde00', '#1866c7', '#7818c7', '#b86c39'
+        ];
+
+        function resizeCanvas() {
+            const tempCanvas = document.createElement('canvas');
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCanvas.width = canvas.width;
+            tempCanvas.height = canvas.height;
+            tempCtx.drawImage(canvas, 0, 0);
+
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+            
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.drawImage(tempCanvas, 0, 0);
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+        setTimeout(resizeCanvas, 100);
+
+        function initPalette() {
+            defaultColors.forEach((color, index) => {
+                const swatch = document.createElement('div');
+                swatch.className = `color-swatch ${index === 0 ? 'active' : ''}`;
+                swatch.style.backgroundColor = color;
+                swatch.dataset.color = color;
+                
+                swatch.addEventListener('click', () => {
+                    document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
+                    swatch.classList.add('active');
+                    updateColor(color);
+                });
+                paletteContainer.appendChild(swatch);
+            });
+        }
+        initPalette();
+
+        function updateColor(color) {
+            currentColor = color;
+            htmlColorPicker.value = color;
+            hexTextInput.value = color.toUpperCase();
+        }
+
+        // Permite abrir o seletor clicando em qualquer lugar do container (melhor UX no mobile)
+        pickerWrapper.addEventListener('click', (e) => {
+            if(e.target !== hexTextInput) {
+                htmlColorPicker.click();
+            }
+        });
+
+        htmlColorPicker.addEventListener('input', (e) => {
+            updateColor(e.target.value);
+            document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
+        });
+
+        hexTextInput.addEventListener('change', (e) => {
+            let val = e.target.value;
+            if(!val.startsWith('#')) val = '#' + val;
+            if(/^#[0-9A-F]{6}$/i.test(val)) {
+                updateColor(val);
+                document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
+            } else {
+                hexTextInput.value = currentColor.toUpperCase();
+            }
+        });
+
+        lineWidthSlider.addEventListener('input', (e) => {
+            currentWidth = e.target.value;
+            lineWidthVal.textContent = `${currentWidth}px`;
+        });
+
+        function getCoordinates(e) {
+            let clientX, clientY;
+            if (e.touches && e.touches.length > 0) {
+                clientX = e.touches[0].clientX;
+                clientY = e.touches[0].clientY;
+            } else {
+                clientX = e.clientX;
+                clientY = e.clientY;
+            }
+            const rect = canvas.getBoundingClientRect();
+            return {
+                x: clientX - rect.left,
+                y: clientY - rect.top
+            };
+        }
+
+        function startPainting(e) {
+            isPainting = true;
+            ctx.beginPath();
+            const coords = getCoordinates(e);
+            ctx.moveTo(coords.x, coords.y);
+            ctx.lineTo(coords.x, coords.y);
+            ctx.lineWidth = currentWidth;
+            ctx.strokeStyle = currentColor;
+            ctx.stroke();
+        }
+
+        function draw(e) {
+            if (!isPainting) return;
+            e.preventDefault();
+            const coords = getCoordinates(e);
+            ctx.lineWidth = currentWidth;
+            ctx.strokeStyle = currentColor;
+            ctx.lineTo(coords.x, coords.y);
+            ctx.stroke();
+        }
+
+        function stopPainting() {
+            isPainting = false;
+            ctx.beginPath();
+        }
+
+        canvas.addEventListener('mousedown', startPainting);
+        canvas.addEventListener('mousemove', draw);
+        window.addEventListener('mouseup', stopPainting);
+
+        canvas.addEventListener('touchstart', startPainting, { passive: false });
+        canvas.addEventListener('touchmove', draw, { passive: false });
+        window.addEventListener('touchend', stopPainting);
+
+        btnClear.addEventListener('click', () => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            if(!isRecording) {
+                recordedFrames = [];
+                btnGenerate.disabled = true;
+            }
+        });
+
+        function captureFrame() {
+            recordedFrames.push(canvas.toDataURL('image/png'));
+        }
+
+        btnRecord.addEventListener('click', () => {
+            if (!isRecording) {
+                isRecording = true;
+                recordedFrames = [];
+                btnGenerate.disabled = true;
+                btnClear.disabled = true;
+                
+                btnRecord.textContent = 'Parar Gravação';
+                btnRecord.classList.add('btn-recording');
+                statusDot.classList.add('recording');
+                statusText.textContent = 'Gravando...';
+
+                recordInterval = setInterval(captureFrame, 1000 / fps);
+            } else {
+                isRecording = false;
+                clearInterval(recordInterval);
+                
+                btnRecord.textContent = 'Iniciar Gravação';
+                btnRecord.classList.remove('btn-recording');
+                statusDot.classList.remove('recording');
+                statusText.textContent = `Salvos ${recordedFrames.length} frames`;
+                
+                btnClear.disabled = false;
+                if (recordedFrames.length > 0) {
+                    btnGenerate.disabled = false;
+                }
+            }
+        });
+
+        // Lógica de Compilação com Loader e Otimização de Resolução
+        btnGenerate.addEventListener('click', () => {
+            if (recordedFrames.length === 0) return;
+
+            // Exibir interface do Loader
+            loaderOverlay.style.display = 'flex';
+            progressBar.style.width = '0%';
+            loaderText.textContent = 'Processando animação transparente...';
+            
+            btnGenerate.disabled = true;
+            btnRecord.disabled = true;
+
+            // Simulação de progresso linear baseado na quantidade de frames capturados
+            // Já que a biblioteca executa via Workers e não possui gancho de progresso nativo estável
+            let currentProgress = 0;
+            const totalFrames = recordedFrames.length;
+            
+            // Estimativa de tempo média baseada na contagem de frames (ex: 45ms por frame)
+            const progressInterval = setInterval(() => {
+                if (currentProgress < 90) {
+                    currentProgress += Math.max(1, Math.floor(50 / (totalFrames * 0.1)));
+                    if (currentProgress > 90) currentProgress = 90;
+                    progressBar.style.width = `${currentProgress}%`;
+                    loaderText.textContent = `Compilando frames: ${currentProgress}%`;
+                }
+            }, 150);
+
+            gifshot.createGIF({
+                images: recordedFrames,
+                // OTIMIZAÇÃO CENTRAL: Cortamos a resolução de renderização interna do GIF pela metade (0.5).
+                // Isso faz o loop do processador voar, sem distorcer o traço quando importado na timeline do editor.
+                gifWidth: canvas.width * 0.5,
+                gifHeight: canvas.height * 0.5,
+                interval: 1 / fps,
+                numWorkers: 2,
+                transparentColor: '#000000',
+                transparentRGB: { r: 0, g: 0, b: 0 }
+            }, function (obj) {
+                clearInterval(progressInterval);
+                
+                if (!obj.error) {
+                    progressBar.style.width = '100%';
+                    loaderText.textContent = 'Pronto! Baixando...';
+                    
+                    setTimeout(() => {
+                        const animatedImage = obj.image;
+                        const downloadLink = document.createElement('a');
+                        downloadLink.href = animatedImage;
+                        downloadLink.download = `animacao_dicarvalho_${Date.now()}.gif`;
+                        document.body.appendChild(downloadLink);
+                        downloadLink.click();
+                        document.body.removeChild(downloadLink);
+                        
+                        // Reseta a interface
+                        loaderOverlay.style.display = 'none';
+                        statusText.textContent = 'GIF baixado!';
+                    }, 400);
+                } else {
+                    loaderOverlay.style.display = 'none';
+                    statusText.textContent = 'Erro ao processar.';
+                    console.error(obj.error);
+                }
+                btnGenerate.disabled = false;
+                btnRecord.disabled = false;
+            });
+        });
+    </script>
+</body>
+</html>
